@@ -1,0 +1,225 @@
+{
+  "53": {
+    "inputs": {
+      "ckpt_name": "animagine-xl-3.1.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "54": {
+    "inputs": {
+      "seed": 32053229750587,
+      "steps": 28,
+      "cfg": 5,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "normal",
+      "denoise": 1,
+      "model": [
+        "53",
+        0
+      ],
+      "positive": [
+        "59",
+        0
+      ],
+      "negative": [
+        "61",
+        0
+      ],
+      "latent_image": [
+        "254",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "55": {
+    "inputs": {
+      "delimiter": ", ",
+      "clean_whitespace": "true",
+      "text_a": [
+        "74",
+        0
+      ],
+      "text_b": [
+        "252",
+        0
+      ]
+    },
+    "class_type": "Text Concatenate",
+    "_meta": {
+      "title": "Text Concatenate"
+    }
+  },
+  "59": {
+    "inputs": {
+      "text": [
+        "55",
+        0
+      ],
+      "clip": [
+        "53",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "61": {
+    "inputs": {
+      "text": [
+        "62",
+        0
+      ],
+      "clip": [
+        "53",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "62": {
+    "inputs": {
+      "delimiter": ", ",
+      "clean_whitespace": "true",
+      "text_a": [
+        "63",
+        0
+      ],
+      "text_b": [
+        "64",
+        0
+      ]
+    },
+    "class_type": "Text Concatenate",
+    "_meta": {
+      "title": "Text Concatenate"
+    }
+  },
+  "63": {
+    "inputs": {
+      "text": "nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]"
+    },
+    "class_type": "Text _O",
+    "_meta": {
+      "title": "Text _O"
+    }
+  },
+  "64": {
+    "inputs": {
+      "text": "looking at viewer, solo, 1girl, 2girls, 3girls, "
+    },
+    "class_type": "Text _O",
+    "_meta": {
+      "title": "Text _O"
+    }
+  },
+  "67": {
+    "inputs": {
+      "samples": [
+        "54",
+        0
+      ],
+      "vae": [
+        "53",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "74": {
+    "inputs": {
+      "text": "masterpeace, best quality, "
+    },
+    "class_type": "Text _O",
+    "_meta": {
+      "title": "Text _O"
+    }
+  },
+  "252": {
+    "inputs": {
+      "text": "Based on the theme provided, I will create a background image for a medieval fantasy setting featuring an elven restaurant interior during a sunny day.\n\nThe background image will depict the interior of an elven-run eatery or tavern. The space will be filled with various customers enjoying their meals and drinks, creating a lively and bustling atmosphere.\n\nThe architectural elements will reflect the elven aesthetic, with intricate wooden structures, ornate chandeliers, and decorative tapestries adorning the walls. Large windows will allow natural sunlight to flood the room, creating a warm and inviting ambiance.\n\nTables and chairs will be scattered throughout the space, accommodating the many patrons. Some customers may be engaged in conversation, while others are focused on their food and drinks. The overall scene will convey a sense of community and camaraderie within the elven establishment.\n\nThe background will not feature any prominent individual characters, but rather focus on the detailed environment and the interactions between the various customers present. This will create a dynamic and immersive scene that sets the stage for the overall narrative or gameplay."
+    },
+    "class_type": "Text _O",
+    "_meta": {
+      "title": "Input Prompt"
+    }
+  },
+  "254": {
+    "inputs": {
+      "width": 1600,
+      "height": 904,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "255": {
+    "inputs": {
+      "upscale_model": [
+        "256",
+        0
+      ],
+      "image": [
+        "67",
+        0
+      ]
+    },
+    "class_type": "ImageUpscaleWithModel",
+    "_meta": {
+      "title": "Upscale Image (using Model)"
+    }
+  },
+  "256": {
+    "inputs": {
+      "model_name": "4x-UltraSharp.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Load Upscale Model"
+    }
+  },
+  "257": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": 1920,
+      "height": 1080,
+      "crop": "center",
+      "image": [
+        "255",
+        0
+      ]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Upscale Image"
+    }
+  },
+  "258": {
+    "inputs": {
+      "images": [
+        "257",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Result Image"
+    }
+  }
+}

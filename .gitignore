@@ -7,6 +7,11 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+BGM/*
+output/*
+game
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/

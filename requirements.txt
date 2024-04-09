@@ -1,0 +1,6 @@
+python-dotenv
+pillow
+anthropic
+requests
+aiohttp
+pydub

@@ -24,6 +24,43 @@ client = anthropic.Anthropic(
 output_dir = "game/game"
 
 
+def fix_json(data:str) -> dict:
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError:
+        try:
+            return eval(data)
+        except:
+            pass
+
+    key = "fix_json:" + str(data)
+    result = load_memory(key)
+    if result:
+        return result
+    
+    message = client.messages.create(
+        model="claude-3-sonnet-20240229",
+        max_tokens=1000,
+        temperature=0,
+        system="You can fix errors in JSON data. Find and correct errors in the JSON input by the user, and output the correct data as JSON. Your own opinions, comments, and additions are not required. Please output only JSON data.",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": data
+                    }
+                ]
+            }
+        ]
+    )
+    result = json.loads(message.content[0].text)
+    print(result)
+    save_memory(key, result)
+    return result
+
+
 async def create_base_story(text):
     result = load_memory(text)
     if result:
@@ -68,8 +105,7 @@ async def create_base_story(text):
 }
 """
 
-    message = await asyncio.to_thread(
-        client.messages.create,
+    message = client.messages.create(
         model="claude-3-opus-20240229",
         max_tokens=4000,
         temperature=0,
@@ -86,18 +122,44 @@ async def create_base_story(text):
             }
         ]
     )
-    result = message.content[0].text
-    try:
-        result = json.loads(result)
-    except json.JSONDecodeError:
-        result = eval(result)
+    result = fix_json(message.content[0].text)
 
     save_memory(text, result)
     return result
 
-async def create_story_continue(base_story: dict, synopsis=None, old_story=None, select_story=None):
+
+async def create_story_continue(base_story: dict, synopsis=None, old_story=None, select_story=None, endinglevel=0, nocache=False):
+    error_occured = False
+    for n in range(3):
+        try:
+            result = await _create_story_continue(base_story, synopsis, old_story, select_story, endinglevel, error_occured or nocache)
+            print(f"result len : {len(result)}")
+            
+            print(f"#base_story\n{base_story}\n\n#synopsis\n{synopsis}\n\n#old_story\n{old_story}\n\n#select_story\n{select_story}\n\n#endinglevel\n{endinglevel}\n\n")
+            print(f"@@@\n{result}\n@@@")
+
+            last_story = result[-1]
+            if "end" in last_story:
+                return result
+            if "select1" in last_story:
+                return result
+        except Exception as e:
+            print(f"create_story_continue: error: {e} ({type(e)}) ")
+
+        await asyncio.sleep(5)
+        print("retrying...")
+        error_occured = True
+    
+    raise Exception("Failed to create story")
+
+
+async def _create_story_continue(base_story: dict, synopsis=None, old_story=None, select_story=None, endinglevel=0, nocache=False):
     key = f"{base_story} {synopsis} {old_story} {select_story}"
     result = load_memory(key)
+
+    if nocache:
+        result = None
+
     if result:
         return result
 
@@ -136,6 +198,20 @@ async def create_story_continue(base_story: dict, synopsis=None, old_story=None,
                         }
                     ]
                 })
+    
+    ending_message = ""
+    if endinglevel == 0:
+        ending_message = ""
+    elif endinglevel == 1:
+        ending_message = "* Please be aware of the ending that is closest to your current progress."
+    elif endinglevel == 2:
+        ending_message = "* Please write the story so that it progresses towards the ending closest to the current progress."
+    elif endinglevel == 3:
+        ending_message = "* Create choices for your players so that the story progresses towards the closest ending to their current progress."
+    elif endinglevel >= 4:
+        ending_message = "* Please make sure to connect the current story to one of the endings and finish the story."
+
+    print(ending_message)
 
     example = """
 [
@@ -144,6 +220,7 @@ async def create_story_continue(base_story: dict, synopsis=None, old_story=None,
 {"bgm":"快晴、明るい、楽しい、平和"},
 {"sound effect":"女性の足音、ハイヒール、コツコツ"},
 {"charactor name":"田中太郎", "display name":"太郎", "talk":"こんにちは！", "expression":"Smile"},
+{"show charactor":"田中詩織"},
 {"charactor name":"田中詩織", "display name":"詩織", "talk":"あら？こんにちは", "expression":"Shy"},
 {"inner voice":"彼女は俺の幼馴染だ"},
 {"charactor name":"田中詩織", "display name":"詩織", "talk":"あたし急いでるから", "expression":"Shy"},
@@ -157,18 +234,47 @@ async def create_story_continue(base_story: dict, synopsis=None, old_story=None,
 {"select1":"エルフをデートに誘う","select2":"家に帰る","select3":"UFOを見つける"}
 ]
 """
+    example_ending = """
+[
+{"background image":"日本、昼間、屋外、住宅街"},
+{"sound effect":"スズメの鳴声、ちゅんちゅん"},
+{"bgm":"快晴、明るい、楽しい、平和"},
+{"sound effect":"女性の足音、ハイヒール、コツコツ"},
+{"charactor name":"田中太郎", "display name":"太郎", "talk":"こんにちは！", "expression":"Smile"},
+{"show charactor":"田中詩織"},
+{"charactor name":"田中詩織", "display name":"詩織", "talk":"あら？こんにちは", "expression":"Shy"},
+{"inner voice":"彼女をどこかで出会った気がする……"},
+{"charactor name":"田中詩織", "display name":"詩織", "talk":"ふふっ……", "expression":"Shy"},
+{"hide charactor":"田中詩織"},
+{"inner voice":"行ってしまった……"},
+{"inner voice":"それ以降彼女とは二度と会う事はなかった……"},
+{"end":"True End"}
+]
+"""
     additional_info = """
 * inner voice is the main character's inner voice.
 * Choose the facial expression that seems closest to character from among Sad, Surprise, Evil Smile, Shy, Angly, Normal and Smile.
-* If you think you've reached the ending, add {"end": "Ending name"} at the end.
+* If you think the story has reached its ending, say what the player feels with {"inner voice": "Protagonist's feelings"} and add {"end": "Ending name"} at the end.
 * "talk" performs the reading process as is. Never include acting instructions in the "talk" section.
-"""
+* Take a close look at the output sample and remember that the output is in JSON format.
+* Don't use text to explain your ethics or provide information about your story. Your output is only in JSON format and is what a direct JSON parser will read. If you provide supplementary information as text, the parser will generate an error and the game will end with an error.
+
+""" + ending_message + "\n"
+
+    choise_str = ", and at the end, be sure to output 3 options that are appropriate for the situation or that are unexpected"
+    add_message = ""
+    if endinglevel >= 4:
+        example = example_ending
+        choise_str = ""
+        add_message = "This is a game scenario. If you need explicit sexual expression to express the story, prioritize the outcome of your choices and use soft expressions to end the game."
+
 
     system = f"""
 # Order
 Think of your story as a continuation of the story entered by the user.
-Please output at least 10 to 20 pieces of the main character's inner voice and conversations between characters, and at the end, be sure to output 3 options that are appropriate for the situation or that are unexpected.
+Please output at least 40 to 50 pieces of the main character's inner voice and conversations between characters{choise_str}.
 The output data is processed as JSON, so your explanation or impressions are not required.
+{ending_message}
 
 # Output format
 {json.loads(example)}
@@ -177,21 +283,27 @@ The output data is processed as JSON, so your explanation or impressions are not
 {additional_info}
 """
 
-    message = await asyncio.to_thread(
-        client.messages.create,
-        model="claude-3-opus-20240229",
+    model = "claude-3-sonnet-20240229"
+    if nocache:
+        model = "claude-3-opus-20240229"
+    message = client.messages.create(
+        model=model,
         max_tokens=4000,
         temperature=0,
         system=system,
         messages=payload
     )
 
-    result = message.content[0].text
-    try:
-        result = json.loads(result)
-    except json.JSONDecodeError:
-        result = eval(result)
+    print(f"--system---------------------------------------------------------------------")
+    print(system)
+    print(f"--payload---------------------------------------------------------------------")
+    print(json.dumps(payload, indent=4, ensure_ascii=False))
+    if nocache:
+        print(f"--message--------------------------------------------------------------------")
+        print(f"message: {message.content[0].text}")
+    print(f"-----------------------------------------------------------------------")
 
+    result = fix_json(message.content[0].text)
     save_memory(key, result)
     return result
 
@@ -205,7 +317,7 @@ async def create_synopsis(data):
         model="claude-3-sonnet-20240229",
         max_tokens=2000,
         temperature=0,
-        system="あなたは情報の要約が得意です。ユーザーに渡されたストーリーの状態を要約してまとめます。各キャラクターごとに持ち物や体の状態や心理状態や目的、お互いをどう思っているかなどを列挙してください。ストーリーの進行状態が分かるようにしてください。あなたの解説や感想は不要です。",
+        system="あなたは情報の要約が得意です。ユーザーに渡されたストーリーの状態を要約してまとめます。各キャラクターごとに、持ち物、体の状態、心理状態、目的、お互いをどう思っているか、学んだ事を列挙してください。ストーリーの進行状態が分かるようにしてください。あなたの解説や感想は不要です。",
         messages=[
             {
                 "role": "user",
@@ -259,6 +371,25 @@ class StoryNode:
     
     async def save(self):
         global tasks
+
+        if len(tasks) > 15:            
+            print("Waiting for tasks to complete")
+            await asyncio.gather(*tasks)
+        else:
+            # 他のタスクにも時間を回す
+            await asyncio.sleep(0.1)
+
+        # タスクの完了をチェック
+        completed_tasks = []
+        for task in tasks:
+            if task.done():
+                completed_tasks.append(task)
+
+        # 完了したタスクを削除
+        for task in completed_tasks:
+            tasks.remove(task)
+            
+        
         end_flag = False
         with open(os.path.join(output_dir, "scene", f"{self}.txt"), "w", encoding='utf8') as f:
             f.write(f"changeFigure:none -left -next;\n")
@@ -275,18 +406,29 @@ class StoryNode:
                         voice_name = load_memory(f"voice: {name_hash}")
                         print(f"voice name : {tag['charactor name']}: {voice_name}")
 
+                        if voice_name is None or not voice_selector.exists_voice_name(voice_name):
+                            used_voices = load_memory("used_voices", [])
+                            voice_name = voice_selector.get_voice_name(tag['charactor name'], used_voices)
+                            used_voices.append(voice_name)
+                            save_memory("used_voices", used_voices)
+                            save_memory(f"voice: {name_hash}", voice_name)
+
                         if voice_name is not None:
+                            print(f"create task: voice name : {tag['charactor name']}: {voice_name}")
                             voice_task = asyncio.create_task(voice_engine.save_voice(mp3_path, voice_name, tag['talk']))
                             tasks.append(voice_task)
 
-                    exp = tag.get('expression').lower().replace("evil smile", "evil")
+                    exp = tag.get('expression',"smile").lower().replace("evil smile", "evil")
                     if exp not in ["sad", "surprise", "evil", "shy", "angly", "smile"]:
                         exp = "smile"
                     f.write(f"changeFigure:{name_hash}_{exp}.png -next;\n")
                     f.write(f"{tag['display name']}:{tag['talk']} -{talk_hash}.mp3;\n")
                     continue
+                if "show charactor" in tag:
+                    f.write(f"changeFigure:none -next;\n")
+                    continue
                 if "hide charactor" in tag:
-                    f.write(f"changeFigure:none;\n")
+                    f.write(f"changeFigure:none -next;\n")
                     continue
                 if "background image" in tag:
                     bg_hash = hashlib.sha256(tag['background image'].encode()).hexdigest()
@@ -307,17 +449,16 @@ class StoryNode:
                     f.write(f":{tag['inner voice']};\n")
                     continue
                 if "add charactor" in tag:
+                    print(f"add charactor: {tag}")
                     name_hash = hashlib.sha256((str(self.base_story)+tag.get('add charactor').get("charactor name")).encode()).hexdigest()
                     if not os.path.exists(os.path.join(output_dir, "figure", f"{name_hash}_smile.png")):
                         chara_task = asyncio.create_task(comfyuitest.gen_charactor(tag.get('add charactor').get("appearance"), os.path.join(output_dir, "figure"), name_hash))
                         tasks.append(chara_task)
 
-                    used_voices_key = f"used_voices"
+                    used_voices_key = "used_voices"
                     used_voices = load_memory(used_voices_key, [])
-                    print(used_voices)
-                    
                     voice_name = load_memory(f"voice: {name_hash}", None)
-                    if voice_name is None:
+                    if voice_name is None or not voice_selector.exists_voice_name(voice_name):
                         voice_name = voice_selector.get_voice_name(tag.get('add charactor'), used_voices)
                         used_voices.append(voice_name)
                         save_memory(f"voice: {name_hash}", voice_name)
@@ -328,6 +469,7 @@ class StoryNode:
                     continue
                 if "end" in tag:
                     f.write("end;\n")
+                    f.write(f";{tag}")
                     end_flag = True
                     continue
             
@@ -342,32 +484,46 @@ class StoryNode:
 
 
 async def recrusive_story(base_story, new_synopsis, old_synopsis, old_story, select_story, level, number) -> StoryNode:
-    if level >= 4:
+    global tasks
+
+    if level >= 8:
         return None
 
-    story = await create_story_continue(base_story, old_synopsis, old_story, select_story)
-    print(story)
-    old_story2 = delete_select(old_story)
-    story2 = delete_select(story)
-    synopsis = f"# Setting:\n{base_story}\n\n# Synopsis:\n{old_synopsis}\n\n# Story:\n{old_story2}\n\n# Action:\n{select_story}\n\n# Story:{story2}"
-    synopsis = await create_synopsis(synopsis)
+    node = None
+    error_occured = False
+    for n in range(3):
+        try:
+            story = list(await create_story_continue(base_story, old_synopsis, old_story, select_story, level - 3, error_occured))
+            print(story)
+            old_story2 = delete_select(old_story)
+            story2 = delete_select(story)
+            synopsis = f"# Setting:\n{base_story}\n\n# Synopsis:\n{old_synopsis}\n\n# Story:\n{old_story2}\n\n# Action:\n{select_story}\n\n# Story:{story2}"
+            synopsis = await create_synopsis(synopsis)
 
-    print(synopsis)
+            print(synopsis)
 
-    node = StoryNode(base_story, story, new_synopsis, old_synopsis, level, number, {})
-    if "end" in node.story_data[-1]:
-        await node.save()
-        return node
+            node = StoryNode(base_story, story, new_synopsis, old_synopsis, level, number, {})
+            print(node.story_data)
+            if "end" in node.story_data[-1]:
+                await node.save()
+                return node
 
-    select_values = search_select(story)
-    num = number * 10
-    for select_value in select_values:
-        next_node = await recrusive_story(base_story, synopsis, new_synopsis, story, select_value, level + 1, num)
-        node.selects[select_value] = next_node
-        num += 1
-    
-    await node.save()
-    
+            select_values = search_select(story)
+            num = number * 10
+            for select_value in select_values:
+                next_node = await recrusive_story(base_story, synopsis, new_synopsis, story, select_value, level + 1, num)
+                node.selects[select_value] = next_node
+                num += 1
+            
+            await node.save()
+
+            break
+        except AttributeError as e:
+            print(f"recrusive_story: error: {e}")
+            error_occured = True
+            await asyncio.sleep(5)
+            continue
+
     return node
 
 
@@ -380,8 +536,9 @@ async def story_gen(text):
         f.write(json.dumps(base_story, ensure_ascii=False, indent=4))
 
     story_titles = load_memory("story_titles", [])
-    if base_story.get("title_japanese", base_story.get('title')) not in story_titles:
-        story_titles.append(base_story.get("title"))
+    story_title = base_story.get("title_japanese", base_story.get('title'))
+    if story_title not in story_titles:
+        story_titles.append(story_title)
     save_memory("story_titles", story_titles)
     save_memory("used_poses", [])
     used_voices_key = f"used_voices"
@@ -435,8 +592,12 @@ async def story_gen(text):
     print(first_node)
 
     with open(os.path.join(output_dir, "scene", "start.txt"), "w", encoding="utf8") as f:
+        added = ["サキュバスの誘惑", "ねこの王国と魔法の地図", "ギャル達の秘密"]
         data = []
         for story_title in story_titles:
+            if not story_title or story_title in added:
+                continue
+            added.append(story_title)
             data.append(f"{story_title}:{hashlib.sha256(story_title.encode()).hexdigest()}_0_0.txt")
         f.write("intro:このゲームは、人が入力したコンセプトをベースに AI が自動作成したものです。|AI による文字の読み間違いや、設定のブレや、画像のミスマッチなどが起こり得ます。|テスト中のため、シナリオは最後まで生成されず、ストーリは途中で停止しますので、予めご了承ください。 -hold;\n")
         f.write("choose:" + "|".join(data) + ";\n")
@@ -453,3 +614,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+

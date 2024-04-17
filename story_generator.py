@@ -551,7 +551,9 @@ Please use the following story settings to output the story data for your visual
 """
         sex_flag = ""
         if elect_level > 0:
-            sex_flag = "- Please create a story and choices that will lead to sexual activity with the heroine in the next choice.\n"
+            sex_flag = """- Please create a story and choices that will lead to sexual activity with the heroine in the next choice.
+
+"""
         story_prompt = """
 # Order
 You are a game engine for visual novel games. You create the following stream from the input data and output it in JSON format.

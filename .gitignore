@@ -8,8 +8,10 @@ __pycache__/
 
 # Distribution / packaging
 BGM/*
-output/*
+output
 game
+BGM_nsfw
+BGM_safe
 
 # Distribution / packaging
 .Python

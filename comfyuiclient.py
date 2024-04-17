@@ -1,7 +1,7 @@
-
 import io
 import uuid
 import json
+import time
 import urllib.request
 import urllib.parse
 import requests
@@ -9,7 +9,7 @@ import aiohttp
 from PIL import Image
 
 
-class ComfyUIClient:
+class ComfyUIClientAsync:
 
     def __init__(self, server, prompt_file):
         self.PROMPT_FILE = prompt_file
@@ -118,3 +118,132 @@ class ComfyUIClient:
 
         return results
 
+
+class ComfyUIClient:
+
+    def __init__(self, server, prompt_file):
+        self.PROMPT_FILE = prompt_file
+        self.SERVER_ADDRESS = server
+        self.CLIENT_ID = str(uuid.uuid4())
+        self.session = None
+
+        with open(self.PROMPT_FILE, 'r', encoding='utf8') as f:
+            self.comfyui_prompt = json.loads(f.read())
+
+    def connect(self):
+        self.session = requests.Session()
+        self.session.get(f"http://{self.SERVER_ADDRESS}/ws?clientId={self.CLIENT_ID}")
+
+    def close(self):
+        if self.session is not None:
+            self.session.close()
+            self.session = None
+
+    def queue_prompt(self, prompt):
+        payload = {"prompt": prompt, "client_id": self.CLIENT_ID}
+        data = json.dumps(payload).encode('utf-8')
+        response = self.session.post(f"http://{self.SERVER_ADDRESS}/prompt", data=data)
+        return response.json()
+
+    def get_image(self, filename, subfolder, folder_type):
+        params = {"filename": filename, "subfolder": subfolder, "type": folder_type}
+        url_values = urllib.parse.urlencode(params)
+        response = self.session.get(f"http://{self.SERVER_ADDRESS}/view?{url_values}")
+        return response.content
+
+    def get_history(self, prompt_id):
+        response = self.session.get(f"http://{self.SERVER_ADDRESS}/history/{prompt_id}")
+        return response.json()
+
+    def get_images(self, prompt):
+        prompt_id = self.queue_prompt(prompt).get('prompt_id')
+        print(f"Prompt ID: {prompt_id}")
+        output_images = {}
+
+        while True:
+            history = self.get_history(prompt_id)
+            if prompt_id in history and 'outputs' in history[prompt_id]:
+                break
+            time.sleep(1)  # 結果が得られるまで1秒待機
+        
+        for node_id, node_output in history[prompt_id]['outputs'].items():
+            images_output = []
+            if 'images' in node_output:
+                for image in node_output['images']:
+                    image_data = self.get_image(image['filename'], image['subfolder'], image['type'])
+                    images_output.append(image_data)
+            output_images[node_id] = images_output
+        
+        return output_images
+    
+    def set_data(self, key, text:str=None, seed:int=None, image:Image.Image=None):
+        key_id = self.find_key_by_title(key)
+        if text is not None:
+            self.comfyui_prompt[key_id]['inputs']['text'] = text
+        if seed is not None:
+            self.comfyui_prompt[key_id]['inputs']['seed'] = int(seed)
+        if image is not None:
+            # Upload image to comfyui server
+            folder_name = "temp"
+            
+            # Save image to byte data
+            byte_data = io.BytesIO()
+            image.save(byte_data, format="PNG")
+            byte_data.seek(0)
+
+            # Upload image
+            resp = self.session.post(
+                f"http://{self.SERVER_ADDRESS}/upload/image", 
+                files={'image': ("temp.png", byte_data)}, 
+                data={"subfolder": folder_name})
+            
+            # Set image path
+            resp_json = json.loads(resp.content.decode('utf-8'))
+            self.comfyui_prompt[key_id]['inputs']['image'] = resp_json.get('subfolder') + '/' + resp_json.get('name')
+
+    def find_key_by_title(self, target_title):
+        target_title = target_title.strip()
+        for key, value in self.comfyui_prompt.items():
+            title = value.get('_meta', {}).get('title', '').strip()
+            if title == target_title:
+                return key
+        print(f"Key not found: {target_title}")
+        return None
+
+    def generate(self, node_names=None) -> dict:
+        node_ids = {}
+        if node_names is not None:
+            for node_name in node_names:
+                node_id = self.find_key_by_title(node_name)
+                if node_id is not None:
+                    node_ids[node_id] = node_name
+
+        images = self.get_images(self.comfyui_prompt)
+        results = {}
+        for node_id, node_images in images.items():
+            if node_id in node_ids:
+                for image_data in node_images:
+                    image = Image.open(io.BytesIO(image_data))
+                    results[node_ids[node_id]] = image
+
+        return results
+
+
+def main():
+    comfyui_client = None
+    print("Starting comfyui client")
+    try:
+        comfyui_client = ComfyUIClient("127.0.0.1:8188", "bgimage_api.json")
+        comfyui_client.connect()
+        comfyui_client.set_data(key='KSampler', seed=1000000)
+        comfyui_client.set_data(key='Input Prompt', text="beautiful background")
+        for key, image in comfyui_client.generate(["Result Image"]).items():
+            print(key)
+            image.save("test.png")
+    finally:
+        if comfyui_client is not None:
+            comfyui_client.close()
+
+
+if __name__ == "__main__":
+    main()

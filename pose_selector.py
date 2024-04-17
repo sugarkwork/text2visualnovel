@@ -3,6 +3,8 @@ import re
 import anthropic
 import copy
 
+from pickle_memory import save_memory, load_memory
+
 
 client = anthropic.Anthropic(
     api_key=os.environ.get("ANTHROPIC_API_KEY"),
@@ -85,6 +87,34 @@ def get_pose_image(theme, exclude_pose_list=None):
     pose_num = int(result.replace('Pose ID:', '').strip())
 
     return tag_files[pose_num]['files']
+
+
+def get_expression(expression):
+    result = load_memory(expression)
+    if result is not None:
+        return result
+    
+    message = client.messages.create(
+        model="claude-3-haiku-20240307",
+        max_tokens=1000,
+        temperature=0,
+        system="You are a game character designer.\nYou can answer various character expressions according to user requests.\n\nThe following six types of images are available as game materials.\n[\"sad\", \"surprise\", \"evil smile\", \"shy\", \"angly\", \"smile\"]\n\nPlease select the one that is closest to the facial expression/emotion specified by the user and output only the answer. Your comments and explanations are not necessary.",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": expression
+                    }
+                ]
+            }
+        ]
+    )
+    result = message.content[0].text
+    result = result.strip('"').strip().lower().replace('evil smile', 'evil')
+    save_memory(expression, result)
+    return result
 
 
 if __name__ == "__main__":

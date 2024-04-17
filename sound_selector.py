@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import anthropic
+import time
 
 from pickle_memory import save_memory, load_memory
 
@@ -22,7 +23,7 @@ def sound_selector(text):
     if result:
         return result
 
-    with open("all_data.json") as f:
+    with open("bgm_data.json") as f:
         all_data = json.load(f)
 
     message = message = client.messages.create(
@@ -49,7 +50,7 @@ def sound_selector(text):
 
 
 async def main():
-    text = "lovery"
+    text = "relaxing music for studying"
     response = sound_selector(text)
     print(response)
 

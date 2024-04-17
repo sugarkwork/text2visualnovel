@@ -26,7 +26,6 @@ async def process_text(name, text) -> io.BytesIO:
 
         try:
             model_id = await get_model_id_by_name(server, name)
-            print(model_id)
 
             url = f"{server}/voice"
             params = {
@@ -45,8 +44,6 @@ async def process_text(name, text) -> io.BytesIO:
                 'style_weight': '10'
             }
             headers = {'accept': 'audio/wav'}
-
-            print(params)
 
             async with session.post(url, params=params, headers=headers) as response:
                 if response.status == 200:

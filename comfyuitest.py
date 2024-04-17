@@ -4,7 +4,7 @@ from PIL import Image
 import asyncio
 import anthropic
 
-from comfyuiclient import ComfyUIClient
+from comfyuiclient import ComfyUIClientAsync as ComfyUIClient
 import pose_selector
 from pickle_memory import load_memory, save_memory
 
@@ -145,10 +145,10 @@ Specific location: Classroom
 Atmosphere: Many students are taking breaks as they wish.
 Style: Illustration (game CG style)
 """
-    bg_task = asyncio.create_task(gen_background(bg_prompt))
+    #bg_task = asyncio.create_task(gen_background(bg_prompt))
     chara_task = asyncio.create_task(gen_charactor("日本の女子高生、絶世の美少女、恥ずかしがりや"))
 
-    await bg_task, chara_task
+    await chara_task
 
 
 if __name__ == "__main__":

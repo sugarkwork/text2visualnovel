@@ -52,3 +52,12 @@
 - 生成にめっちゃ時間かかる上に、API代もすごくかかる
 
 まだまだ非常に課題の多いプロジェクトです。
+
+## クレジット
+
+このプロジェクトは、以下のオープンソースプロジェクトのコードを一部使用しています。
+
+- [json_repair](https://github.com/mangiucugna/json_repair)
+  - Copyright (c) mangiucugna
+  - MIT ライセンスの下で公開されています。
+
